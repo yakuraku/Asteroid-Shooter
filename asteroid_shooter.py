@@ -26,7 +26,7 @@ class Ship(pygame.sprite.Sprite):
     def laser_timer(self):
         if not self.can_shoot:
             current_time = pygame.time.get_ticks()
-            if current_time - self.shoot_time > 500:
+            if current_time - self.shoot_time > 650:
                 self.can_shoot = True
 
     def input_position(self):
@@ -42,23 +42,32 @@ class Ship(pygame.sprite.Sprite):
                 Laser(self.rect.midtop, laser_group)
         
     def collide_check(self):
+        if pygame.sprite.spritecollide(self, shield_power_up_group, True, pygame.sprite.collide_mask):
+            if self.shield_available == False and not self.shield:
+                self.shield_available = True
+                zap.play()
+
         if pygame.sprite.spritecollide(self, meteor_group, True, pygame.sprite.collide_mask):
             if self.shield:
                 self.shield.kill()
+                shield_down.play()
                 self.shield = None
             else:
+                spaceship_damage.play()
                 self.ship_life -= 1
                 self.damage_overlay.update()
 
         if pygame.sprite.spritecollide(self, stone_meteor_group, True, pygame.sprite.collide_mask):
             if self.shield:
                 self.shield.kill()
+                shield_down.play()
                 self.shield = None
             
             self.ship_life -= 1
             self.damage_overlay.update()
 
         if self.ship_life <= 0:
+            crash.play()
             self.game_eval = False
 
         if self.rect.bottom < 0:
@@ -70,14 +79,16 @@ class Ship(pygame.sprite.Sprite):
             self.shield = Shield(shield_group, pos=self.rect.center)
             self.shield_available = False
             self.shield_cooldown = pygame.time.get_ticks()
+            shield_up.play()
 
         if not self.shield_available:
             current_time = pygame.time.get_ticks()
-            if current_time - self.shield_cooldown > 5000:
-                self.shield_available = True
+            if current_time - self.shield_cooldown > 10000:
+                # self.shield_available = True
                 
                 if not self.shield_destroyed and self.shield:
                     self.shield.kill()
+                    shield_down.play()
                     self.shield = None
                     
             elif self.shield:
@@ -101,10 +112,14 @@ class Laser(pygame.sprite.Sprite):
         self.pos = pygame.math.Vector2(self.rect.topleft)
         self.direction = pygame.math.Vector2(0, -1)
         self.speed = 600
+        laser_shoot.play()
     
     def collide_check(self):
         #Normal Meteor
         if pygame.sprite.spritecollide(self, meteor_group, True, pygame.sprite.collide_mask):
+            meteor_explosion.play()
+            if randint(1, 10) == 2:
+                ShieldPowerUp(groups=shield_power_up_group, pos=self.rect.midtop)
             self.kill()
 
         #Stone Meteor
@@ -245,7 +260,30 @@ class DamageOverlay(pygame.sprite.Sprite):
         if self.image:
             self.rect.center = self.ship.rect.center
 
+class ShieldPowerUp(pygame.sprite.Sprite):
+    def __init__(self, groups, pos):
+        super().__init__(groups)
+        self.image = pygame.image.load('assets/shield_power/shield_icon.png').convert_alpha()
+        self.rect = self.image.get_rect(center=pos)
 
+        self.mask = pygame.mask.from_surface(self.image)
+
+        self.pos = pygame.math.Vector2(self.rect.center)
+        self.direction = pygame.math.Vector2(0, 1)
+        self.speed = 450
+    
+    def shield_icon_pos_check(self):
+        if self.rect.top > WINDOW_HEIGHT:
+            self.kill()
+    
+    def update(self, dt):
+        self.pos += self.direction * self.speed * dt
+        self.rect.topleft = (round(self.pos.x), round(self.pos.y))
+
+        self.shield_icon_pos_check()
+
+
+    
 # basic setup 
 pygame.init()
 # WINDOW_WIDTH, WINDOW_HEIGHT = 1280, 720 
@@ -296,6 +334,7 @@ meteor_group = pygame.sprite.Group()
 shield_group = pygame.sprite.Group()
 stone_meteor_group = pygame.sprite.Group()
 damageoverlay_group = pygame.sprite.Group()
+shield_power_up_group = pygame.sprite.Group()
 
 font = pygame.font.Font('assets/main_menu/LEMONMILK-BoldItalic.otf', 50)
 highscore_font = pygame.font.Font('assets/main_menu/LEMONMILK-BoldItalic.otf', 80)
@@ -315,7 +354,7 @@ credits_text_rect = play_text_surf.get_rect(center = (int(WINDOW_WIDTH * 0.85), 
 credits_scaled_brush_stroke = pygame.transform.scale(brush_stroke, (300, 90))
 credits_brush_stroke_rect = scaled_brush_stroke.get_rect(center = (int(WINDOW_WIDTH * 0.85), (int(WINDOW_HEIGHT * 0.85))))
 
-version_surf = version_font.render("V1.5.0 - UNSTABLE", True, (255,255,255))
+version_surf = version_font.render("V1.5.1 - UNSTABLE", True, (255,255,255))
 version_rect = version_surf.get_rect(topleft = (int(WINDOW_WIDTH * 0.025), (int(WINDOW_HEIGHT * 0.95))))
 
 dd_normal_image = pygame.image.load('assets/credits/credits_normal.jpg').convert()
@@ -325,13 +364,19 @@ dd_normal = pygame.transform.scale(dd_normal_image, (WINDOW_WIDTH, WINDOW_HEIGHT
 dd_effect = pygame.transform.scale(dd_effect_image, (WINDOW_WIDTH, WINDOW_HEIGHT))
 
 
-#MUSIC
+#Music and SFX
 click = pygame.mixer.Sound('assets/music/click.wav')
 crash = pygame.mixer.Sound('assets/music/crash.wav')
-game_bg_music = pygame.mixer.Sound('assets/music/game_bg_music.wav')
+game_bg_music = pygame.mixer.Sound('assets/music/game_bg_music_2.mp3')
 laser_shoot = pygame.mixer.Sound('assets/music/laser_shoot_to_edit.wav')
 menu_bg_music = pygame.mixer.Sound('assets/music/menu_bg_music.wav')
 mouse_hover = pygame.mixer.Sound('assets/music/mouse_hover.wav')
+
+shield_down = pygame.mixer.Sound('assets/sfx/sfx_shieldDown.ogg')
+shield_up = pygame.mixer.Sound('assets/sfx/sfx_ShieldUp.ogg')
+zap = pygame.mixer.Sound('assets/sfx/sfx_zap.ogg')
+meteor_explosion = pygame.mixer.Sound('assets/sfx/meteor_explosion.mp3')
+spaceship_damage = pygame.mixer.Sound('assets/sfx/spaceship_damage.mp3')
 
 play_mouse_hover_bool = True
 credits_mouse_hover_bool = True
@@ -550,6 +595,7 @@ def game():
         shield_group.update()
         stone_meteor_group.update(dt)
         damageoverlay_group.update()
+        shield_power_up_group.update(dt)
 
         # score
         score.display()
@@ -561,6 +607,7 @@ def game():
         shield_group.draw(display_surface)
         stone_meteor_group.draw(display_surface)
         damageoverlay_group.draw(display_surface)
+        shield_power_up_group.draw(display_surface)
 
         # draw the frame 
         pygame.display.update()
