@@ -1,5 +1,6 @@
 import pygame, sys
-from random import randint, uniform
+from random import randint, uniform, choice, randrange
+import math
 
 class Ship(pygame.sprite.Sprite):
     def __init__(self, groups):
@@ -337,7 +338,7 @@ damageoverlay_group = pygame.sprite.Group()
 shield_power_up_group = pygame.sprite.Group()
 
 font = pygame.font.Font('assets/main_menu/LEMONMILK-BoldItalic.otf', 50)
-highscore_font = pygame.font.Font('assets/main_menu/LEMONMILK-BoldItalic.otf', 80)
+highscore_font = pygame.font.Font('assets/main_menu/LEMONMILK-BoldItalic.otf', 75)
 version_font = pygame.font.Font('assets/main_menu/LEMONMILK-BoldItalic.otf', 20)
 
 play_text = "Play"
@@ -354,7 +355,7 @@ credits_text_rect = play_text_surf.get_rect(center = (int(WINDOW_WIDTH * 0.85), 
 credits_scaled_brush_stroke = pygame.transform.scale(brush_stroke, (300, 90))
 credits_brush_stroke_rect = scaled_brush_stroke.get_rect(center = (int(WINDOW_WIDTH * 0.85), (int(WINDOW_HEIGHT * 0.85))))
 
-version_surf = version_font.render("V1.5.1 - UNSTABLE", True, (255,255,255))
+version_surf = version_font.render("V1.5.5 - UNSTABLE", True, (255,255,255))
 version_rect = version_surf.get_rect(topleft = (int(WINDOW_WIDTH * 0.025), (int(WINDOW_HEIGHT * 0.95))))
 
 dd_normal_image = pygame.image.load('assets/credits/credits_normal.jpg').convert()
@@ -381,10 +382,104 @@ spaceship_damage = pygame.mixer.Sound('assets/sfx/spaceship_damage.mp3')
 play_mouse_hover_bool = True
 credits_mouse_hover_bool = True
 
+#Menu Screen Assets
+WINDOW_WIDTH, WINDOW_HEIGHT = 1920, 1080
+RES = WIDTH, HEIGHT = WINDOW_WIDTH, WINDOW_HEIGHT
+NUM_STARS = 1500
+CENTER = pygame.math.Vector2(WIDTH // 2, HEIGHT // 2)
+Z_DISTANCE = 50
+ALPHA = 100
+
+class Star:
+    def __init__(self, app, mode):
+        if mode!= "main":
+            self.Z_DISTANCE = 140
+            self.ALPHA = 30
+        else:
+            self.Z_DISTANCE = 50
+            self.ALPHA = 100
+        
+        self.screen = app.screen
+        self.pos3d = self.get_pos3d(mode)
+        self.vel = uniform(0.05, 0.25) if mode == "main" else uniform(0.45, 0.95)
+        self.meteor = choice(app.meteors)
+        self.screen_pos = pygame.math.Vector2(0, 0)
+        self.original_size = 15
+        self.size = self.original_size * 0.1  # Start at 10% of original size
+        
+
+    def get_pos3d(self,mode, scale_pos=100):
+        angle = uniform(0, 2 * math.pi)
+        radius = randrange(HEIGHT // scale_pos, HEIGHT) * scale_pos if mode =="main" else randrange(HEIGHT // 2, HEIGHT) * scale_pos
+        x = radius * math.cos(angle)
+        y = radius * math.sin(angle)
+        return pygame.math.Vector3(x, y, self.Z_DISTANCE)
+
+    def update(self, mode):
+        self.pos3d.z -= self.vel
+        self.pos3d = self.get_pos3d(mode) if self.pos3d.z < 1 else self.pos3d
+
+        self.screen_pos = pygame.math.Vector2(self.pos3d.x, self.pos3d.y) / self.pos3d.z + CENTER
+        
+        # Calculate size based on z-distance
+        z_factor = 1 - (self.pos3d.z / self.Z_DISTANCE)  # 0 when far, 1 when close
+        size_factor = 0.1 + (3.0 * z_factor)  # 0.1 when far, 1.5 when close
+        self.size = self.original_size * size_factor
+
+        # rotate xy
+        self.pos3d.xy = self.pos3d.xy.rotate(0.2)
+
+    def draw(self):
+        s = self.size
+        if (-s < self.screen_pos.x < WIDTH + s) and (-s < self.screen_pos.y < HEIGHT + s):
+            scaled_meteor = pygame.transform.scale(self.meteor, (int(s), int(s)))
+            self.meteor_rect = scaled_meteor.get_rect(center=self.screen_pos)
+            self.screen.blit(scaled_meteor, self.meteor_rect)
+
+class Starfield:
+    def __init__(self, app, mode):
+        if mode!="main":
+            NUM_STARS = 5000
+        else:
+            NUM_STARS = 1500
+        self.stars = [Star(app, mode) for i in range(NUM_STARS)]
+
+    def run(self, mode):
+        [star.update(mode) for star in self.stars]
+        self.stars.sort(key=lambda star: star.pos3d.z, reverse=True)
+        [star.draw() for star in self.stars]
+class App:
+    def __init__(self, mode):
+        self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
+        self.alpha_surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
+        self.alpha_surface.set_alpha(ALPHA)
+        self.meteors = [pygame.image.load('assets/meteors/meteor_med1.png').convert_alpha(), 
+                        pygame.image.load('assets/meteors/meteor_med2.png').convert_alpha(), 
+                        pygame.image.load('assets/meteors/meteor_small1.png').convert_alpha(), 
+                        pygame.image.load('assets/meteors/meteor_big1.png').convert_alpha(),
+                        pygame.image.load('assets/stone_meteors/stonemeteor_med1.png').convert_alpha(),
+                        pygame.image.load('assets/stone_meteors/stonemeteor_med2.png').convert_alpha(),
+                        pygame.image.load('assets/stone_meteors/stonemeteor_small1.png').convert_alpha(),
+                        pygame.image.load('assets/stone_meteors/stonemeteor_big3.png').convert_alpha()
+                        ]
+        self.clock = pygame.time.Clock()
+        self.starfield = Starfield(self, mode)
+
+    def update(self, mode):
+        self.starfield.run(mode)
+
+    def draw(self, surface, mode):
+        surface.blit(self.alpha_surface, (0, 0))
+        self.starfield.run(mode)
 
 def retry_screen(highscore):
 
     menu_bg_music.set_volume(100)
+
+    app = App(mode="retry")
+
+    Star.vel = uniform(0.45, 0.95)
+
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -396,7 +491,10 @@ def retry_screen(highscore):
                     pygame.quit()
                     sys.exit()
         
-        display_surface.fill('black')
+        app.update(mode="retry")
+        display_surface.fill((0, 0, 0))  # Fill with black
+
+        app.draw(display_surface, mode="credits")
 
         mx, my = pygame.mouse.get_pos()
 
@@ -476,6 +574,8 @@ def credits():
 def main_menu(play_text_surf, version_surf, credits_text_surf):
     menu_bg_music.play(-1)
     credits_mouse_hover_bool = True
+    app = App(mode="main")  # Create an instance of App for the starfield background
+    
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -486,23 +586,21 @@ def main_menu(play_text_surf, version_surf, credits_text_surf):
                 if event.key == pygame.K_ESCAPE:
                     pygame.quit()
                     sys.exit()
-            
-        display_surface.blit(scaled_mm_bg_image, (0,0))
+        
+        app.update(mode="main")  # Update the starfield
+        
+        display_surface.fill((0, 0, 0))  # Fill with black
+        app.draw(display_surface, mode="main")  # Draw the starfield
         
         mx, my = pygame.mouse.get_pos()
 
         display_surface.blit(logo, logo_rect)
         display_surface.blit(version_surf, version_rect)
 
-        # button_1 = pygame.Rect(50, 100, 200, 50)
         display_surface.blit(play_text_surf, play_text_rect)
         display_surface.blit(credits_text_surf, credits_text_rect)
-    
-
-        # pygame.draw.rect(display_surface, (255,0,0), button_1)
 
         if play_text_rect.collidepoint((mx, my)):
-            # mouse_hover.play(1)
             if not play_mouse_hover_bool:
                 mouse_hover.play()
                 play_mouse_hover_bool = True
@@ -516,14 +614,12 @@ def main_menu(play_text_surf, version_surf, credits_text_surf):
         else:
             menu_bg_music.set_volume(100)
             play_mouse_hover_bool = False
-            
             play_text_surf = font.render(play_text, True, (255,255,255))
         
         if credits_text_rect.collidepoint((mx, my)):
             if not credits_mouse_hover_bool:
                 mouse_hover.play()
                 credits_mouse_hover_bool = True
-
             display_surface.blit(credits_scaled_brush_stroke, credits_brush_stroke_rect)
             credits_text_surf = font.render(credits_text, True, (0,0,0))
             display_surface.blit(credits_text_surf, credits_text_rect)
@@ -535,7 +631,7 @@ def main_menu(play_text_surf, version_surf, credits_text_surf):
             credits_text_surf = font.render(credits_text, True, (255,255,255))
 
         clock.tick(60)
-        pygame.display.update()       
+        pygame.display.update()
 
 def game(): 
     # game loop
