@@ -439,10 +439,10 @@ class Star:
 class Starfield:
     def __init__(self, app, mode):
         if mode!="main":
-            NUM_STARS = 5000
+            self.NUM_STARS = 5000
         else:
-            NUM_STARS = 1500
-        self.stars = [Star(app, mode) for i in range(NUM_STARS)]
+            self.NUM_STARS = 1500
+        self.stars = [Star(app, mode) for i in range(self.NUM_STARS)]
 
     def run(self, mode):
         [star.update(mode) for star in self.stars]
@@ -450,9 +450,13 @@ class Starfield:
         [star.draw() for star in self.stars]
 class App:
     def __init__(self, mode):
+        if mode!= "main":
+            self.ALPHA = 30
+        else:
+            self.ALPHA = 100 
         self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
         self.alpha_surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
-        self.alpha_surface.set_alpha(ALPHA)
+        self.alpha_surface.set_alpha(self.ALPHA)
         self.meteors = [pygame.image.load('assets/meteors/meteor_med1.png').convert_alpha(), 
                         pygame.image.load('assets/meteors/meteor_med2.png').convert_alpha(), 
                         pygame.image.load('assets/meteors/meteor_small1.png').convert_alpha(), 
