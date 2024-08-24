@@ -64,6 +64,7 @@ class Ship(pygame.sprite.Sprite):
                 shield_down.play()
                 self.shield = None
             
+            spaceship_damage.play()
             self.ship_life -= 1
             self.damage_overlay.update()
 
