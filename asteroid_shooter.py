@@ -1,12 +1,91 @@
 import pygame, sys
 from random import randint, uniform, choice, randrange
 import math
+import os
+import json
+
+# --- Ship Data Structure ---
+NEW_SHIP_IMAGES = [
+    'assets/new_ships/playerShip1_blue.png',
+    'assets/new_ships/playerShip1_green.png',
+    'assets/new_ships/playerShip1_red.png',
+    'assets/new_ships/playerShip2_blue.png',
+    'assets/new_ships/playerShip2_green.png',
+    'assets/new_ships/playerShip2_red.png',
+    'assets/new_ships/playerShip3_blue.png',
+    'assets/new_ships/playerShip3_green.png',
+    'assets/new_ships/playerShip3_orange.png',
+    'assets/new_ships/playerShip3_red.png',
+]
+
+DEFAULT_SHIP = {
+    'id': 'default',
+    'name': 'Star Ranger',
+    'image': 'assets/ship/ship.png',
+    'price': 0
+}
+
+# Helper for random ship names
+def generate_ship_name():
+    prefixes = ["Nova", "Stellar", "Cosmo", "Astro", "Galactic", "Solar", "Lunar", "Quantum", "Nebula", "Comet"]
+    suffixes = ["Falcon", "Rider", "Viper", "Eagle", "Phoenix", "Drifter", "Hawk", "Blazer", "Wraith", "Specter"]
+    return f"{choice(prefixes)} {choice(suffixes)}"
+
+# Build ship list
+SHIPS = [DEFAULT_SHIP]
+for idx, img_path in enumerate(NEW_SHIP_IMAGES):
+    SHIPS.append({
+        'id': f'ship_{idx+1}',
+        'name': generate_ship_name(),
+        'image': img_path,
+        'price': 25
+    })
+
+SAVE_FILE = 'save_data.json'
+
+def load_save_data():
+    if not os.path.exists(SAVE_FILE):
+        # Default: 0 credits, only default ship unlocked, default ship selected
+        return {
+            'credits': 0,
+            'unlocked_ships': ['default'],
+            'last_selected_ship': 'default'
+        }
+    try:
+        with open(SAVE_FILE, 'r') as f:
+            data = json.load(f)
+        # Validate keys
+        if 'credits' not in data or 'unlocked_ships' not in data or 'last_selected_ship' not in data:
+            raise Exception('Corrupt save file')
+        return data
+    except Exception:
+        # If corrupted, reset
+        return {
+            'credits': 0,
+            'unlocked_ships': ['default'],
+            'last_selected_ship': 'default'
+        }
+
+def save_save_data(data):
+    with open(SAVE_FILE, 'w') as f:
+        json.dump(data, f)
+
+# Utility to get ship by id
+def get_ship_by_id(ship_id):
+    for ship in SHIPS:
+        if ship['id'] == ship_id:
+            return ship
+    return DEFAULT_SHIP
+
+# --- Global Save Data ---
+save_data = load_save_data()
 
 class Ship(pygame.sprite.Sprite):
-    def __init__(self, groups):
+    def __init__(self, groups, image_path=None):
         super().__init__(groups)
-        
-        self.image = pygame.image.load('assets/ship/ship.png').convert_alpha()
+        if image_path is None:
+            image_path = 'assets/ship/ship.png'
+        self.image = pygame.image.load(image_path).convert_alpha()
         self.rect = self.image.get_rect(center=(WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2))
         self.mask = pygame.mask.from_surface(self.image)
 
@@ -163,7 +242,46 @@ class Meteor(pygame.sprite.Sprite):
         if self.rect.top > WINDOW_HEIGHT:
             self.kill()
 
+    def meteor_collision_check(self):
+        # Check collision with other normal meteors
+        collisions = pygame.sprite.spritecollide(self, meteor_group, False, pygame.sprite.collide_mask)
+        for other in collisions:
+            if other != self:
+                # Calculate size-based randomness (smaller = more random)
+                my_width = self.rect.width
+                other_width = other.rect.width
+                my_rand = uniform(-0.2, 0.2) * (60 / my_width)
+                other_rand = uniform(-0.2, 0.2) * (60 / other_width)
+                # Reverse x-direction and add randomness
+                self.direction.x = -self.direction.x + my_rand
+                other.direction.x = -other.direction.x + other_rand
+                # Nudge apart to prevent overlap
+                if self.rect.centerx < other.rect.centerx:
+                    self.pos.x -= 5
+                    other.pos.x += 5
+                else:
+                    self.pos.x += 5
+                    other.pos.x -= 5
+                # Clamp x direction to [-1, 1] for stability
+                self.direction.x = max(-1, min(1, self.direction.x))
+                other.direction.x = max(-1, min(1, other.direction.x))
+
+        # Check collision with stone meteors
+        stone_collisions = pygame.sprite.spritecollide(self, stone_meteor_group, False, pygame.sprite.collide_mask)
+        for stone in stone_collisions:
+            # Only normal meteor changes direction
+            my_width = self.rect.width
+            my_rand = uniform(-0.2, 0.2) * (60 / my_width)
+            self.direction.x = -self.direction.x + my_rand
+            # Nudge apart
+            if self.rect.centerx < stone.rect.centerx:
+                self.pos.x -= 5
+            else:
+                self.pos.x += 5
+            self.direction.x = max(-1, min(1, self.direction.x))
+
     def update(self, dt):
+        self.meteor_collision_check()
         self.pos += self.direction * self.speed * dt
         self.rect.topleft = (round(self.pos.x), round(self.pos.y))
         self.rotate(dt)
@@ -356,7 +474,7 @@ credits_text_rect = play_text_surf.get_rect(center = (int(WINDOW_WIDTH * 0.85), 
 credits_scaled_brush_stroke = pygame.transform.scale(brush_stroke, (300, 90))
 credits_brush_stroke_rect = scaled_brush_stroke.get_rect(center = (int(WINDOW_WIDTH * 0.85), (int(WINDOW_HEIGHT * 0.85))))
 
-version_surf = version_font.render("V1.5.5 - UNSTABLE", True, (255,255,255))
+version_surf = version_font.render("V1.9.2 - UNSTABLE", True, (255,255,255))
 version_rect = version_surf.get_rect(topleft = (int(WINDOW_WIDTH * 0.025), (int(WINDOW_HEIGHT * 0.95))))
 
 dd_normal_image = pygame.image.load('assets/credits/credits_normal.jpg').convert()
@@ -528,7 +646,71 @@ def retry_screen(highscore):
             display_surface.blit(retry_surf, retry_rect)
             if pygame.mouse.get_pressed()[0]:
                 click.play()
-                game()
+                # Ask if user wants to use last ship or select new
+                last_ship_id = save_data.get('last_selected_ship', 'default')
+                last_ship = get_ship_by_id(last_ship_id)
+                # Dialog with proper layering and consistent fonts
+                retry_dialog_font = pygame.font.Font('assets/main_menu/LEMONMILK-BoldItalic.otf', 32)
+                retry_button_font = pygame.font.Font('assets/main_menu/LEMONMILK-BoldItalic.otf', 30)
+                
+                # Semi-transparent overlay to dim background
+                overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
+                overlay.fill((0, 0, 0, 150))
+                display_surface.blit(overlay, (0, 0))
+                
+                dialog_surf = pygame.Surface((650, 280), pygame.SRCALPHA)
+                dialog_surf.fill((25, 25, 25, 250))
+                dialog_rect = dialog_surf.get_rect(center=(WINDOW_WIDTH//2, WINDOW_HEIGHT//2))
+                
+                # Draw dialog border
+                pygame.draw.rect(display_surface, (100, 100, 100), dialog_rect, 3, border_radius=15)
+                display_surface.blit(dialog_surf, dialog_rect)
+                
+                msg1 = retry_dialog_font.render(f'Use last ship: {last_ship["name"]}?', True, (255,255,255))
+                msg2 = retry_dialog_font.render('Or select a new ship.', True, (255,255,255))
+                msg1_rect = msg1.get_rect(center=(dialog_rect.centerx, dialog_rect.top + 70))
+                msg2_rect = msg2.get_rect(center=(dialog_rect.centerx, dialog_rect.top + 120))
+                display_surface.blit(msg1, msg1_rect)
+                display_surface.blit(msg2, msg2_rect)
+                
+                # Buttons without overlays, moved higher with proper spacing
+                use_last_rect = pygame.Rect(WINDOW_WIDTH//2-190, WINDOW_HEIGHT//2+40, 160, 50)
+                select_new_rect = pygame.Rect(WINDOW_WIDTH//2+30, WINDOW_HEIGHT//2+40, 200, 50)
+                
+                # Simple colored backgrounds
+                pygame.draw.rect(display_surface, (60,180,60), use_last_rect, border_radius=8)
+                pygame.draw.rect(display_surface, (80,80,200), select_new_rect, border_radius=8)
+                
+                use_last_surf = retry_button_font.render('Use Last', True, (255,255,255))
+                select_new_surf = retry_button_font.render('Select New', True, (255,255,255))
+                use_last_surf_rect = use_last_surf.get_rect(center=use_last_rect.center)
+                select_new_surf_rect = select_new_surf.get_rect(center=select_new_rect.center)
+                display_surface.blit(use_last_surf, use_last_surf_rect)
+                display_surface.blit(select_new_surf, select_new_surf_rect)
+                pygame.display.update()
+                # Wait for user input
+                waiting = True
+                while waiting:
+                    for e in pygame.event.get():
+                        if e.type == pygame.QUIT:
+                            pygame.quit()
+                            sys.exit()
+                        if e.type == pygame.KEYDOWN and e.key == pygame.K_ESCAPE:
+                            pygame.quit()
+                            sys.exit()
+                        if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
+                            mx2, my2 = pygame.mouse.get_pos()
+                            use_last_rect = pygame.Rect(WINDOW_WIDTH//2-190, WINDOW_HEIGHT//2+40, 160, 50)
+                            select_new_rect = pygame.Rect(WINDOW_WIDTH//2+30, WINDOW_HEIGHT//2+40, 160, 50)
+                            if use_last_rect.collidepoint((mx2, my2)):
+                                game(selected_ship_id=last_ship_id)
+                                return
+                            elif select_new_rect.collidepoint((mx2, my2)):
+                                selected_ship_id = ship_selection_screen()
+                                if selected_ship_id:
+                                    game(selected_ship_id=selected_ship_id)
+                                return
+                    clock.tick(60)
         else:
             play_mouse_hover_bool = False
             retry_surf = font.render(f"RETRY", True, (255,255,255))
@@ -580,6 +762,7 @@ def main_menu(play_text_surf, version_surf, credits_text_surf):
     menu_bg_music.play(-1)
     credits_mouse_hover_bool = True
     app = App(mode="main")  # Create an instance of App for the starfield background
+    global save_data
     
     while True:
         for event in pygame.event.get():
@@ -602,6 +785,7 @@ def main_menu(play_text_surf, version_surf, credits_text_surf):
         display_surface.blit(logo, logo_rect)
         display_surface.blit(version_surf, version_rect)
 
+
         display_surface.blit(play_text_surf, play_text_rect)
         display_surface.blit(credits_text_surf, credits_text_rect)
 
@@ -615,7 +799,10 @@ def main_menu(play_text_surf, version_surf, credits_text_surf):
             if pygame.mouse.get_pressed()[0]:
                 click.play()
                 menu_bg_music.set_volume(0)
-                game()
+                # Ship selection before game
+                selected_ship_id = ship_selection_screen()
+                if selected_ship_id:
+                    game(selected_ship_id=selected_ship_id)
         else:
             menu_bg_music.set_volume(100)
             play_mouse_hover_bool = False
@@ -638,11 +825,19 @@ def main_menu(play_text_surf, version_surf, credits_text_surf):
         clock.tick(60)
         pygame.display.update()
 
-def game(): 
+def game(selected_ship_id=None): 
     # game loop
 
+    global save_data
+
     # sprite creation 
-    ship = Ship(spaceship_group)
+    if selected_ship_id is None:
+        selected_ship_id = save_data.get('last_selected_ship', 'default')
+    selected_ship = get_ship_by_id(selected_ship_id)
+    save_data['last_selected_ship'] = selected_ship_id
+    save_save_data(save_data)
+    
+    ship = Ship(spaceship_group, image_path=selected_ship['image'])
 
     # timer 
     meteor_timer = pygame.event.custom_type()
@@ -652,15 +847,14 @@ def game():
     pygame.time.set_timer(stone_meteor_timer, 500)
 
     score = Score()
-
     score.score_start()
     
     menu_bg_music.set_volume(0)
     game_bg_music.play(-1)
     game_bg_music.set_volume(100)
     game_loop = True
+    last_credit_time = pygame.time.get_ticks()
     while game_loop and ship.game_eval:
-        
         # event loop
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -681,8 +875,7 @@ def game():
                 stone_meteor_y_pos = randint(-150, -50)
                 stone_meteor_x_pos = randint(-100, WINDOW_WIDTH + 100)
                 Stone_Meteor((stone_meteor_x_pos, stone_meteor_y_pos), groups=stone_meteor_group)
-            
-
+        
         # delta time 
         dt = clock.tick() / 1000
 
@@ -701,6 +894,13 @@ def game():
         # score
         score.display()
 
+        # credits logic: 1 credit per 10 seconds survived
+        current_time = pygame.time.get_ticks()
+        if (current_time - last_credit_time) >= 10000:
+            save_data['credits'] += 1
+            last_credit_time = current_time
+            save_save_data(save_data)
+
         # graphics 
         spaceship_group.draw(display_surface)
         laser_group.draw(display_surface)
@@ -714,6 +914,280 @@ def game():
         pygame.display.update()
     
     game_bg_music.set_volume(0)
+    save_save_data(save_data)
     retry_screen(highscore = score.ref_score)
+
+def ship_selection_screen():
+    global save_data
+    running = True
+    selected_ship_id = save_data.get('last_selected_ship', 'default')
+    unlock_dialog = None  # (ship_id, ship_name, price) if showing dialog
+    error_dialog = None  # error message if not enough credits
+    double_click_timer = 0
+    last_clicked_ship = None
+    
+    # Add starfield background for ship selection
+    app = App(mode="ship_selection")
+    grid_cols = 4
+    grid_margin = 100
+    ship_size = 160
+    highlight_scale = 1.15
+    hover_scale = 1.3
+    slide_distance = 20
+    # Standardized fonts for consistency
+    name_font = pygame.font.Font('assets/main_menu/LEMONMILK-BoldItalic.otf', 24)
+    button_font = pygame.font.Font('assets/main_menu/LEMONMILK-BoldItalic.otf', 36)
+    price_font = pygame.font.Font('assets/main_menu/LEMONMILK-BoldItalic.otf', 20)
+    dialog_font = pygame.font.Font('assets/main_menu/LEMONMILK-BoldItalic.otf', 32)
+    dialog_button_font = pygame.font.Font('assets/main_menu/LEMONMILK-BoldItalic.otf', 30)
+    back_button_rect = pygame.Rect(60, WINDOW_HEIGHT - 100, 220, 70)
+    back_button_surf = button_font.render('Back', True, (255,255,255))
+    back_brush_stroke = pygame.transform.scale(brush_stroke, (250, 90))
+    back_brush_rect = back_brush_stroke.get_rect(center=back_button_rect.center)
+    
+    # Preload ship images
+    ship_imgs = {}
+    for ship in SHIPS:
+        img = pygame.image.load(ship['image']).convert_alpha()
+        ship_imgs[ship['id']] = img
+    
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    return None
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                mx, my = pygame.mouse.get_pos()
+                current_time = pygame.time.get_ticks()
+                
+                # Back button
+                if back_button_rect.collidepoint((mx, my)) and not unlock_dialog and not error_dialog:
+                    return None
+                # Dialogs
+                if unlock_dialog:
+                    # Confirm or cancel
+                    confirm_rect = pygame.Rect(WINDOW_WIDTH//2-140, WINDOW_HEIGHT//2+50, 120, 50)
+                    cancel_rect = pygame.Rect(WINDOW_WIDTH//2+20, WINDOW_HEIGHT//2+50, 120, 50)
+                    if confirm_rect.collidepoint((mx, my)):
+                        # Buy ship
+                        ship_id, ship_name, price = unlock_dialog
+                        if save_data['credits'] >= price:
+                            save_data['credits'] -= price
+                            save_data['unlocked_ships'].append(ship_id)
+                            save_save_data(save_data)
+                            unlock_dialog = None
+                        else:
+                            error_dialog = 'Not enough credits!'
+                            unlock_dialog = None
+                    elif cancel_rect.collidepoint((mx, my)):
+                        unlock_dialog = None
+                elif error_dialog:
+                    ok_rect = pygame.Rect(WINDOW_WIDTH//2-60, WINDOW_HEIGHT//2+40, 120, 50)
+                    if ok_rect.collidepoint((mx, my)):
+                        error_dialog = None
+                else:
+                    # Ship grid - double click logic
+                    for idx, ship in enumerate(SHIPS):
+                        col = idx % grid_cols
+                        row = idx // grid_cols
+                        grid_w = grid_cols * (ship_size + grid_margin) - grid_margin
+                        grid_x = (WINDOW_WIDTH - grid_w) // 2
+                        grid_y = 160
+                        x = grid_x + col * (ship_size + grid_margin)
+                        y = grid_y + row * (ship_size + grid_margin + 60)
+                        rect = pygame.Rect(x, y, ship_size, ship_size)
+                        if rect.collidepoint((mx, my)):
+                            if ship['id'] in save_data['unlocked_ships']:
+                                # Double click detection
+                                if (last_clicked_ship == ship['id'] and 
+                                    current_time - double_click_timer < 500):
+                                    # Double click detected - start game
+                                    save_data['last_selected_ship'] = ship['id']
+                                    save_save_data(save_data)
+                                    return ship['id']
+                                else:
+                                    # Single click - just select
+                                    selected_ship_id = ship['id']
+                                    last_clicked_ship = ship['id']
+                                    double_click_timer = current_time
+                            else:
+                                unlock_dialog = (ship['id'], ship['name'], ship['price'])
+        # Draw
+        app.update(mode="ship_selection")
+        display_surface.fill((0,0,0))
+        app.draw(display_surface, mode="ship_selection")
+        # Title
+        title_font = pygame.font.Font('assets/main_menu/LEMONMILK-BoldItalic.otf', 52)
+        title_surf = title_font.render('Select Your Ship', True, (255,255,255))
+        title_rect = title_surf.get_rect(center=(WINDOW_WIDTH//2, 70))
+        display_surface.blit(title_surf, title_rect)
+        
+        # Show credits in ship selection screen
+        credits_display_font = pygame.font.Font('assets/main_menu/LEMONMILK-BoldItalic.otf', 28)
+        credits_surf = credits_display_font.render(f'Credits: {save_data["credits"]}', True, (255, 255, 80))
+        credits_rect = credits_surf.get_rect(topright=(WINDOW_WIDTH - 60, 40))
+        display_surface.blit(credits_surf, credits_rect)
+        # Ship grid with hover animations
+        mx, my = pygame.mouse.get_pos()
+        hovered_ship_idx = None
+        
+        # Find which ship is hovered
+        for idx, ship in enumerate(SHIPS):
+            col = idx % grid_cols
+            row = idx // grid_cols
+            grid_w = grid_cols * (ship_size + grid_margin) - grid_margin
+            grid_x = (WINDOW_WIDTH - grid_w) // 2
+            grid_y = 160
+            x = grid_x + col * (ship_size + grid_margin)
+            y = grid_y + row * (ship_size + grid_margin + 60)
+            rect = pygame.Rect(x, y, ship_size, ship_size)
+            if rect.collidepoint((mx, my)) and ship['id'] in save_data['unlocked_ships']:
+                hovered_ship_idx = idx
+                break
+        
+        for idx, ship in enumerate(SHIPS):
+            col = idx % grid_cols
+            row = idx // grid_cols
+            grid_w = grid_cols * (ship_size + grid_margin) - grid_margin
+            grid_x = (WINDOW_WIDTH - grid_w) // 2
+            grid_y = 160
+            x = grid_x + col * (ship_size + grid_margin)
+            y = grid_y + row * (ship_size + grid_margin + 60)
+            rect = pygame.Rect(x, y, ship_size, ship_size)
+            is_selected = (ship['id'] == selected_ship_id)
+            mouse_over = (idx == hovered_ship_idx)
+            
+            # Calculate position offset and scale based on hover state
+            offset_x = 0
+            scale = 1.0
+            
+            if ship['id'] in save_data['unlocked_ships']:
+                if mouse_over:
+                    scale = hover_scale
+                elif hovered_ship_idx is not None:
+                    # Adjacent ships slide away
+                    if abs(idx - hovered_ship_idx) == 1 and row == (hovered_ship_idx // grid_cols):
+                        # Same row, adjacent ship
+                        if idx < hovered_ship_idx:
+                            offset_x = -slide_distance
+                        else:
+                            offset_x = slide_distance
+                
+                if is_selected and not mouse_over:
+                    scale = highlight_scale
+            
+            # Draw ship with transformations
+            img = ship_imgs[ship['id']]
+            img_scaled = pygame.transform.smoothscale(img, (int(ship_size*scale), int(ship_size*scale)))
+            img_rect = img_scaled.get_rect(center=(rect.centerx + offset_x, rect.centery))
+            
+            # Darken locked ships instead of overlay
+            if ship['id'] not in save_data['unlocked_ships']:
+                # Create darkened version
+                dark_img = img_scaled.copy()
+                dark_overlay = pygame.Surface(img_scaled.get_size(), pygame.SRCALPHA)
+                dark_overlay.fill((0, 0, 0, 150))
+                dark_img.blit(dark_overlay, (0, 0))
+                display_surface.blit(dark_img, img_rect)
+                
+                # Simple lock icon without heavy overlay
+                lock_center = img_rect.centerx, img_rect.centery + 10
+                pygame.draw.circle(display_surface, (200, 200, 200), (lock_center[0], lock_center[1]-8), 12, 3)
+                pygame.draw.rect(display_surface, (200, 200, 200), (lock_center[0]-10, lock_center[1]-2, 20, 18), border_radius=4)
+            else:
+                display_surface.blit(img_scaled, img_rect)
+            
+            # Ship name
+            name_surf = name_font.render(ship['name'], True, (255,255,255))
+            name_rect = name_surf.get_rect(center=(rect.centerx + offset_x, rect.bottom+25))
+            display_surface.blit(name_surf, name_rect)
+            
+            # Price (if locked)
+            if ship['id'] not in save_data['unlocked_ships']:
+                price_surf = price_font.render(f'{ship["price"]} credits', True, (255,220,80))
+                price_rect = price_surf.get_rect(center=(rect.centerx + offset_x, rect.bottom+55))
+                display_surface.blit(price_surf, price_rect)
+            
+        # Back button with brush overlay on hover
+        mx, my = pygame.mouse.get_pos()
+        if back_button_rect.collidepoint((mx, my)):
+            display_surface.blit(back_brush_stroke, back_brush_rect)
+            back_button_surf = button_font.render('Back', True, (0,0,0))
+        else:
+            back_button_surf = button_font.render('Back', True, (255,255,255))
+        
+        display_surface.blit(back_button_surf, back_button_rect.move(30,10))
+        
+        # Draw dialogs LAST to ensure they appear on top
+        if unlock_dialog:
+            # Semi-transparent overlay to dim background
+            overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 150))
+            display_surface.blit(overlay, (0, 0))
+            
+            ship_id, ship_name, price = unlock_dialog
+            dialog_surf = pygame.Surface((550, 280), pygame.SRCALPHA)
+            dialog_surf.fill((25, 25, 25, 250))
+            dialog_rect = dialog_surf.get_rect(center=(WINDOW_WIDTH//2, WINDOW_HEIGHT//2))
+            
+            # Draw dialog border
+            pygame.draw.rect(display_surface, (100, 100, 100), dialog_rect, 3, border_radius=15)
+            display_surface.blit(dialog_surf, dialog_rect)
+            
+            msg1 = dialog_font.render(f'Unlock {ship_name}?', True, (255,255,255))
+            msg2 = dialog_font.render(f'Cost: {price} credits', True, (255,220,80))
+            msg1_rect = msg1.get_rect(center=(dialog_rect.centerx, dialog_rect.top + 70))
+            msg2_rect = msg2.get_rect(center=(dialog_rect.centerx, dialog_rect.top + 120))
+            display_surface.blit(msg1, msg1_rect)
+            display_surface.blit(msg2, msg2_rect)
+            
+            # Confirm/cancel buttons without overlays, moved higher with spacing
+            confirm_rect = pygame.Rect(WINDOW_WIDTH//2-140, WINDOW_HEIGHT//2+50, 120, 50)
+            cancel_rect = pygame.Rect(WINDOW_WIDTH//2+20, WINDOW_HEIGHT//2+50, 120, 50)
+            
+            # Simple colored backgrounds
+            pygame.draw.rect(display_surface, (60,180,60), confirm_rect, border_radius=8)
+            pygame.draw.rect(display_surface, (180,60,60), cancel_rect, border_radius=8)
+            
+            conf_surf = dialog_button_font.render('Buy', True, (255,255,255))
+            canc_surf = dialog_button_font.render('Back', True, (255,255,255))
+            conf_rect = conf_surf.get_rect(center=confirm_rect.center)
+            canc_rect = canc_surf.get_rect(center=cancel_rect.center)
+            display_surface.blit(conf_surf, conf_rect)
+            display_surface.blit(canc_surf, canc_rect)
+        if error_dialog:
+            # Semi-transparent overlay to dim background
+            overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 150))
+            display_surface.blit(overlay, (0, 0))
+            
+            dialog_surf = pygame.Surface((500, 220), pygame.SRCALPHA)
+            dialog_surf.fill((25, 25, 25, 250))
+            dialog_rect = dialog_surf.get_rect(center=(WINDOW_WIDTH//2, WINDOW_HEIGHT//2))
+            
+            # Draw dialog border
+            pygame.draw.rect(display_surface, (100, 100, 100), dialog_rect, 3, border_radius=15)
+            display_surface.blit(dialog_surf, dialog_rect)
+            
+            msg = dialog_font.render(error_dialog, True, (255,100,100))
+            msg_rect = msg.get_rect(center=(dialog_rect.centerx, dialog_rect.top + 80))
+            display_surface.blit(msg, msg_rect)
+            
+            ok_rect = pygame.Rect(WINDOW_WIDTH//2-60, WINDOW_HEIGHT//2+40, 120, 50)
+            
+            # Simple colored background
+            pygame.draw.rect(display_surface, (80,80,200), ok_rect, border_radius=8)
+            
+            ok_surf = dialog_button_font.render('OK', True, (255,255,255))
+            ok_surf_rect = ok_surf.get_rect(center=ok_rect.center)
+            display_surface.blit(ok_surf, ok_surf_rect)
+        pygame.display.update()
+        clock.tick(60)
+    save_data['last_selected_ship'] = selected_ship_id
+    save_save_data(save_data)
+    return selected_ship_id
 
 main_menu(play_text_surf, version_surf, credits_text_surf)
