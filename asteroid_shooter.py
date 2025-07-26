@@ -25,18 +25,19 @@ DEFAULT_SHIP = {
     'price': 0
 }
 
-# Helper for random ship names
-def generate_ship_name():
-    prefixes = ["Nova", "Stellar", "Cosmo", "Astro", "Galactic", "Solar", "Lunar", "Quantum", "Nebula", "Comet"]
-    suffixes = ["Falcon", "Rider", "Viper", "Eagle", "Phoenix", "Drifter", "Hawk", "Blazer", "Wraith", "Specter"]
-    return f"{choice(prefixes)} {choice(suffixes)}"
+# --- Ship Data ---
+SHIP_NAMES = [
+    "Star Falcon", "Nova Rider", "Cosmo Viper", "Astro Eagle", "Galactic Phoenix",
+    "Solar Drifter", "Lunar Hawk", "Quantum Blazer", "Nebula Wraith", "Comet Specter"
+]
 
 # Build ship list
 SHIPS = [DEFAULT_SHIP]
 for idx, img_path in enumerate(NEW_SHIP_IMAGES):
+    ship_name = SHIP_NAMES[idx % len(SHIP_NAMES)]
     SHIPS.append({
         'id': f'ship_{idx+1}',
-        'name': generate_ship_name(),
+        'name': ship_name,
         'image': img_path,
         'price': 25
     })

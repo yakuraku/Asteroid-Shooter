@@ -1,6 +1,6 @@
 # Asteroid Shooter
 
-Asteroid Shooter is an engaging and challenging 2D space shooter game developed in Python using the Pygame library. In this game, you control a spaceship navigating through space, avoiding and destroying meteors. With immersive gameplay, dynamic GUI elements, and an integrated soundtrack, Asteroid Shooter provides a captivating gaming experience.
+Asteroid Shooter is an engaging and challenging 2D space shooter game developed in Python using the Pygame library. In this game, you control a spaceship navigating through space, avoiding and destroying meteors. With immersive gameplay, a ship hangar to unlock and choose your vessel, a credits system, dynamic GUI elements, and an integrated soundtrack, Asteroid Shooter provides a captivating gaming experience.
 
 ## Table of Contents
 
@@ -9,7 +9,8 @@ Asteroid Shooter is an engaging and challenging 2D space shooter game developed 
 - [How to Play](#how-to-play)
   - [Controls](#controls)
   - [Game Mechanics](#game-mechanics)
-  - [Scoring System](#scoring-system)
+  - [The Hangar](#the-hangar)
+  - [Scoring and Credits](#scoring-and-credits)
 - [Perspective Projection](#perspective-projection)
   - [Understanding Perspective Projection](#understanding-perspective-projection)
   - [References](#references)
@@ -18,8 +19,10 @@ Asteroid Shooter is an engaging and challenging 2D space shooter game developed 
 
 ## Game Overview
 
-In Asteroid Shooter, you pilot a spaceship, navigating through a meteor-filled space. The goal is to survive as long as possible while avoiding indestructible stone meteors and shooting down regular meteors. As you progress, your score increases, and the challenge intensifies. The game features:
+In Asteroid Shooter, you pilot a spaceship, navigating through a meteor-filled space. The goal is to survive as long as possible while avoiding indestructible stone meteors and shooting down regular meteors. As you progress, your score increases, and you earn credits to unlock new ships. The game features:
 
+- **Ship Hangar:** A selection of ships to unlock and fly, each with a unique design.
+- **Credits System:** Earn credits by playing the game and use them to expand your ship collection.
 - **Two types of meteors:** Regular meteors (destructible) and Stone meteors (indestructible).
 - **Power-ups:** A 10% chance for regular meteors to drop a shield that can protect your spaceship.
 - **Damage System:** The spaceship can sustain up to 4 hits, with visual damage effects indicating the severity of the damage.
@@ -80,10 +83,21 @@ To play Asteroid Shooter, follow these steps:
 - **Collision Effects:** 
   - Stone meteors interact with each other upon collision, changing direction similarly to how two balls would collide and bounce off.
 
-### Scoring System
+### The Hangar
+
+Before you start a new game, you'll visit the Ship Hangar. Here you can:
+
+- **Select Your Ship:** Choose from any of the ships you have unlocked. To start the game with a specific ship, double-click on it.
+- **Unlock New Ships:** Use the credits you've earned to purchase new ships. Each ship has a different design, but all share the same performance characteristics.
+- **Default Ship:** Every player starts with the "Star Ranger" ship unlocked by default.
+
+### Scoring and Credits
 
 - **Score Calculation:** 
-  - The longer you survive, the higher your score. Destroying regular meteors also adds to your score. The challenge increases as you progress, making it harder to survive.
+  - Your score is based on how long you survive. The longer you stay alive, the higher your score.
+
+- **Earning Credits:**
+  - For every 10 seconds you survive in the game, you will earn 1 credit. These credits are saved automatically and can be used to unlock new ships in the Hangar.
 
 ## Perspective Projection
 
